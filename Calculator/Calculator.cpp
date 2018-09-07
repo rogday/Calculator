@@ -10,18 +10,13 @@
 #include <vector>
 
 namespace AST {
-	enum Types { Number, Sign };
-
-	struct Token {
-		union {
-			double fractional;
-			int64_t integer;
-			struct {
-				int32_t priority;
-				char val;
-			} sign;
-		};
-		Types type;
+	union Token {
+		double fractional;
+		int64_t integer;
+		struct {
+			int32_t priority;
+			char val;
+		} sign;
 	};
 
 	const std::unordered_map<char, int> signToPriority = {
@@ -31,73 +26,66 @@ namespace AST {
 
 	const std::int32_t adder =
 		std::max_element(signToPriority.begin(), signToPriority.end(),
-			[](auto l, auto r) { return l.second < r.second; })
-		->second +
-		1;
+			[](auto l, auto r) { return l.second < r.second; })->second + 1;
 
 	const std::size_t end = std::numeric_limits<std::size_t>::max();
 
-	class Tokenizer {
-	private:
-		std::string str;
 
-	public:
-		Tokenizer(std::string &str) : str(str) {}
+	std::vector<Token> Tokenize(std::string &str) {
+		std::vector<Token> result;
 
-		std::vector<Token> Tokenize() {
-			std::vector<Token> result;
+		std::size_t numberStart = end; // presumably you'll run out of memory the way sooner
+		std::size_t numberEnd = end;
 
-			std::size_t numberStart =
-				end; // presumably you'll run out of memory the way sooner
-			std::size_t numberEnd = end;
+		std::int32_t lvl = 0;
+		auto it = signToPriority.end();
 
-			std::int32_t lvl = 0;
-			auto it = signToPriority.end();
+		for (std::size_t i = 0; i <= str.size(); ++i) { // string.c_str() - null-terminated array of char
+			if (std::isdigit(str[i])) {
+				if (numberStart == end)
+					numberStart = numberEnd = i;
+				else
+					++numberEnd;
+			}
+			else if (numberEnd != end) {
+				if (result.size() % 2 != 0)
+					throw std::exception("More than one sign in a row.");
 
-			for (std::size_t i = 0; i <= str.size();
-				++i) { // string.c_str() - null-terminated array of char
-				if (std::isdigit(str[i])) {
-					if (numberStart == end)
-						numberStart = numberEnd = i;
-					else
-						++numberEnd;
-				}
-				else if (numberEnd != end) {
-					Token t;
+				Token t;
 
-					t.type = Types::Number;
-					t.integer = std::stoi(std::string(str, numberStart, numberEnd + 1));
+				t.integer = std::stoi(std::string(str, numberStart, numberEnd + 1));
 
-					result.push_back(t);
-					numberStart = numberEnd = end;
-				}
-
-				if (str[i] == '(')
-					++lvl;
-				else if (str[i] == ')') {
-					--lvl;
-					if (lvl < 0)
-						throw std::exception("Brackets do not match");
-				}
-
-				auto it = signToPriority.find(str[i]);
-
-				if (it != signToPriority.end()) {
-					Token t;
-
-					t.type = Types::Sign;
-					t.sign.priority = lvl * adder + signToPriority.find(str[i])->second;
-					t.sign.val = str[i];
-
-					result.push_back(t);
-				}
+				result.push_back(t);
+				numberStart = numberEnd = end;
 			}
 
-			if (lvl != 0)
-				throw std::exception("Brackets do not match");
+			if (str[i] == '(')
+				++lvl;
+			else if (str[i] == ')') {
+				--lvl;
+				if (lvl < 0)
+					throw std::exception("Brackets do not match");
+			}
 
-			return result;
+			auto it = signToPriority.find(str[i]);
+
+			if (it != signToPriority.end()) {
+				if (result.size() % 2 == 0)
+					throw std::exception("More than one sign in a row.");
+
+				Token t;
+
+				t.sign.priority = lvl * adder + signToPriority.find(str[i])->second;
+				t.sign.val = str[i];
+
+				result.push_back(t);
+			}
 		}
+
+		if (lvl != 0)
+			throw std::exception("Brackets do not match");
+
+		return result;
 	};
 
 	template <class T> T eval(char ch, T &lhs, T &rhs) {
@@ -132,18 +120,20 @@ int main() {
 
 	// std::cin >> s;
 
-	AST::Tokenizer T(s);
-
 	try {
-		auto res = T.Tokenize();
+		auto res = AST::Tokenize(s);
+
+		bool even = true;
 
 		for (auto &t : res) {
-			if (t.type == AST::Types::Number)
+			if (even)
 				std::cout << "Number: " << t.integer;
 			else {
 				std::cout << "Sign: " << t.sign.val
 					<< ", priority: " << t.sign.priority;
 			}
+
+			even = !even;
 
 			std::cout << std::endl;
 		}
