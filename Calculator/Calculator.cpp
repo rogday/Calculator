@@ -1,148 +1,115 @@
-﻿#include <algorithm>
-#include <cctype>
-#include <cmath>
-#include <cstdint>
-#include <iostream>
-#include <limits>
-#include <stdexcept>
-#include <string>
-#include <unordered_map>
 #include <vector>
+#include <regex>
+#include <string>
+#include <iostream>
+#include <cctype>
+#include <unordered_map>
+#include <stack>
+#include <functional>
+#include <cmath>
 
-namespace AST {
-	union Token {
-		double fractional;
-		int64_t integer;
-		struct {
-			int32_t priority;
-			char val;
-		} sign;
-	};
+struct Func {
+	int priority;
+	int arity;
+	std::function<float(std::vector<float>&)> func;
+};
 
-	const std::unordered_map<char, int> signToPriority = {
-		{'+', 1}, {'-', 1}, {'*', 2}, {'^', 3}, {'/', 2}, {'|', 2}, {'%', 2} };
+std::unordered_map<std::string, Func> signToFunc = {
+		{"+", {1, 2, [](std::vector<float>& a) {return a[0] + a[1]; }}},
+		{"-", {1, 2, [](std::vector<float>& a) {return a[0] - a[1]; }}},
+		{"*", {2, 2, [](std::vector<float>& a) {return a[0] * a[1]; }}},
+		{"/", {2, 2, [](std::vector<float>& a) {return a[0] / a[1]; }}},
+		{"^", {3, 2, [](std::vector<float>& a) {return pow(a[0], a[1]); }}},
 
-	const std::unordered_map<char, double> constants = { {'e', 2.7}, {'p', 3.4} };
+		{"ln", {3, 1, [](std::vector<float>& a) {return log(a[0]); }}},
+		{"lg", {3, 1, [](std::vector<float>& a) {return log(a[0]) / log(10); }}},
+		{"log", {3, 2, [](std::vector<float>& a) {return log(a[0]) / log(a[1]); }}},
 
-	const std::int32_t adder =
-		std::max_element(signToPriority.begin(), signToPriority.end(),
-			[](auto l, auto r) { return l.second < r.second; })->second + 1;
+		{"sqrt", {3, 1, [](std::vector<float>& a) {return pow(a[0], 0.5); }}},
 
-	const std::size_t end = std::numeric_limits<std::size_t>::max();
+		{"(", {4, 0, [](std::vector<float>& a) {return 42; }}},
+		{")", {0, 0, [](std::vector<float>& a) {return 42; }}},
+		{"=", {-1, 0, [](std::vector<float>& a) {return 42; }}}
+};
 
-
-	std::vector<Token> Tokenize(std::string &str) {
-		std::vector<Token> result;
-
-		std::size_t numberStart = end; // presumably you'll run out of memory the way sooner
-		std::size_t numberEnd = end;
-
-		std::int32_t lvl = 0;
-		auto it = signToPriority.end();
-
-		for (std::size_t i = 0; i <= str.size(); ++i) { // string.c_str() - null-terminated array of char
-			if (std::isdigit(str[i])) {
-				if (numberStart == end)
-					numberStart = numberEnd = i;
-				else
-					++numberEnd;
-			}
-			else if (numberEnd != end) {
-				if (result.size() % 2 != 0)
-					throw std::exception("More than one sign in a row.");
-
-				Token t;
-
-				t.integer = std::stoi(std::string(str, numberStart, numberEnd + 1));
-
-				result.push_back(t);
-				numberStart = numberEnd = end;
-			}
-
-			if (str[i] == '(')
-				++lvl;
-			else if (str[i] == ')') {
-				--lvl;
-				if (lvl < 0)
-					throw std::exception("Brackets do not match");
-			}
-
-			auto it = signToPriority.find(str[i]);
-
-			if (it != signToPriority.end()) {
-				if (result.size() % 2 == 0)
-					throw std::exception("More than one sign in a row.");
-
-				Token t;
-
-				t.sign.priority = lvl * adder + signToPriority.find(str[i])->second;
-				t.sign.val = str[i];
-
-				result.push_back(t);
-			}
-		}
-
-		if (lvl != 0)
-			throw std::exception("Brackets do not match");
-
-		return result;
-	};
-
-	template <class T> T eval(char ch, T &lhs, T &rhs) {
-		static_assert(std::is_integral<T>::value, "Integral required.");
-		static_assert(std::is_floating_point<T>::value, "Floating point required.");
-
-		switch (ch) {
-		case '+':
-			return lhs + rhs;
-		case '-':
-			return lhs - rhs;
-		case '*':
-			return lhs * rhs;
-		case '/':
-			return lhs / rhs;
-		case '^':
-			return std::pow(lhs, rhs);
-		case '|':
-			return 0; // check later
-		case '%':
-			return 0; // check later
-
-		default:
-			throw std::exception("Wrong operator: " + ch);
-		}
-	};
-}; // namespace AST
+std::unordered_map<std::string, float> consts = { {"e", 2.7}, {"pi", 3.1}, {"g", 9.8} };
 
 int main() {
-	std::string s = "1 * (23 / 123 ^ 1) + (123 + 23 + 1) + 3";
-	std::cout << s << std::endl << std::endl;
+	std::string pattern = R"((\d+(\.\d+)?)|(\=)";
 
-	// std::cin >> s;
+	for (auto& p : signToFunc) {
+		if (!isalpha(p.first[0]))
+			pattern += "|\\" + p.first;
+		else
+			pattern += "|" + p.first;
+	}
 
-	try {
-		auto res = AST::Tokenize(s);
+	for (auto& p : consts)
+		pattern += "|" + p.first;
+	pattern += ")";
 
-		bool even = true;
+	std::regex num(pattern);
+	std::string string;
+	std::getline(std::cin, string);
+	string += "=";
 
-		for (auto &t : res) {
-			if (even)
-				std::cout << "Number: " << t.integer;
-			else {
-				std::cout << "Sign: " << t.sign.val
-					<< ", priority: " << t.sign.priority;
+	auto start = std::sregex_iterator(string.begin(), string.end(), num);
+	auto end = std::sregex_iterator();
+
+	std::stack<std::string> functions;
+	std::stack<float> numbers;
+
+	bool isPrevNum = false;
+
+	for (auto i = start; i != end; ++i) {
+		auto& substr = i->str();
+		auto it = consts.find(substr);
+
+		if (it != consts.end()) {
+			numbers.push(it->second);
+			isPrevNum = true;
+		} else {
+			if (isdigit(substr[0])) {
+				numbers.push(stof(substr));
+				isPrevNum = true;
+			} else {
+				while (!functions.empty() && (signToFunc[substr].priority <= signToFunc[functions.top()].priority) &&
+					(numbers.size() >= signToFunc[functions.top()].arity)) {
+					Func function = signToFunc[functions.top()];
+
+					if (functions.top() == "(")
+						break;
+
+					std::vector<float> args(function.arity);
+
+					std::cout << "aplying " << functions.top() << ", args: "<<std::endl;
+					for (int i = function.arity - 1; i >= 0; --i) {
+						args[i] = numbers.top();
+						std::cout << args[i] << ' ';
+						numbers.pop();
+					}
+					std::cout <<std::endl;
+
+					numbers.push(function.func(args));
+					functions.pop();
+				}
+
+				if (!functions.empty() && functions.top() == "(" && substr == ")")
+					functions.pop();
+				else {
+					functions.push(substr);
+					if (substr == "-" && !isPrevNum)
+						numbers.push(0);
+				}
+				isPrevNum = false;
 			}
-
-			even = !even;
-
-			std::cout << std::endl;
 		}
 	}
-	catch (std::exception &e) {
-		std::cout << e.what() << std::endl;
-	}
+	
+	if (numbers.size() != 1 || functions.size() != 1 || functions.top() != "=")
+		std::cout << "error." << std::endl;
+	else
+		std::cout << numbers.top() << std::endl;
 
 	std::cin.get();
-
-	return 0;
 }
