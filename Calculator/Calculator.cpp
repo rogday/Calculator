@@ -15,26 +15,44 @@ struct Func {
 };
 
 std::unordered_map<std::string, Func> signToFunc = {
-		{"+", {1, 2, [](std::vector<float>& a) {return a[0] + a[1]; }}},
-		{"-", {1, 2, [](std::vector<float>& a) {return a[0] - a[1]; }}},
-		{"*", {2, 2, [](std::vector<float>& a) {return a[0] * a[1]; }}},
-		{"/", {2, 2, [](std::vector<float>& a) {return a[0] / a[1]; }}},
-		{"^", {3, 2, [](std::vector<float>& a) {return pow(a[0], a[1]); }}},
+	{ "+", { 1, 2, [](std::vector<float>& a) {return a[0] + a[1]; } } },
+	{ "-", { 1, 2, [](std::vector<float>& a) {return a[0] - a[1]; } } },
+	{ "*", { 2, 2, [](std::vector<float>& a) {return a[0] * a[1]; } } },
+	{ "/", { 2, 2, [](std::vector<float>& a) {return a[0] / a[1]; } } },
+	{ "^", { 3, 2, [](std::vector<float>& a) {return pow(a[0], a[1]); } } },
 
-		{"ln", {3, 1, [](std::vector<float>& a) {return log(a[0]); }}},
-		{"lg", {3, 1, [](std::vector<float>& a) {return log(a[0]) / log(10); }}},
-		{"log", {3, 2, [](std::vector<float>& a) {return log(a[0]) / log(a[1]); }}},
+	{ "ln", { 3, 1, [](std::vector<float>& a) {return log(a[0]); } } },
+	{ "lg", { 3, 1, [](std::vector<float>& a) {return log(a[0]) / log(10); } } },
+	{ "log", { 3, 2, [](std::vector<float>& a) {return log(a[0]) / log(a[1]); } } },
+	{ "pow", { 3, 2, [](std::vector<float>& a) {return pow(a[0], a[1]); } } },
 
-		{"sqrt", {3, 1, [](std::vector<float>& a) {return pow(a[0], 0.5); }}},
+	{ "sqrt", { 3, 1, [](std::vector<float>& a) {return pow(a[0], 0.5); } } },
 
-		{"(", {4, 0, [](std::vector<float>& a) {return 42; }}},
-		{")", {0, 0, [](std::vector<float>& a) {return 42; }}},
-		{"=", {-1, 0, [](std::vector<float>& a) {return 42; }}}
+	{ "(", { 4, 0, [](std::vector<float>& a) {return 42; } } },
+	{ ")", { 0, 0, [](std::vector<float>& a) {return 42; } } },
+	{ "=", { -1, 0, [](std::vector<float>& a) {return 42; } } }
 };
 
-std::unordered_map<std::string, float> consts = { {"e", 2.7}, {"pi", 3.1}, {"g", 9.8} };
+std::unordered_map<std::string, float> consts = { { "e", 2.7 }, { "pi", 3.1 }, { "g", 9.8 } };
 
 int main() {
+	setlocale(0, "LC_RUS");
+
+	int n;
+	std::cout << "Number of variables: ";
+	std::cin >> n;
+
+	while (n--){
+		std::string string;
+		double d;
+		std::cout << "\nName: ";
+		std::cin >> string;
+		std::cout << "Value: ";
+		std::cin >> d;
+		consts[string] = d;
+	}
+	std::cin.get();
+
 	std::string pattern = R"((\d+(\.\d+)?)|(\=)";
 
 	for (auto& p : signToFunc) {
@@ -62,17 +80,19 @@ int main() {
 	bool isPrevNum = false;
 
 	for (auto i = start; i != end; ++i) {
-		auto& substr = i->str();
+		std::string substr = i->str();
 		auto it = consts.find(substr);
 
 		if (it != consts.end()) {
 			numbers.push(it->second);
 			isPrevNum = true;
-		} else {
+		}
+		else {
 			if (isdigit(substr[0])) {
 				numbers.push(stof(substr));
 				isPrevNum = true;
-			} else {
+			}
+			else {
 				while (!functions.empty() && (signToFunc[substr].priority <= signToFunc[functions.top()].priority) &&
 					(numbers.size() >= signToFunc[functions.top()].arity)) {
 					Func function = signToFunc[functions.top()];
@@ -81,14 +101,10 @@ int main() {
 						break;
 
 					std::vector<float> args(function.arity);
-
-					std::cout << "aplying " << functions.top() << ", args: "<<std::endl;
 					for (int i = function.arity - 1; i >= 0; --i) {
 						args[i] = numbers.top();
-						std::cout << args[i] << ' ';
 						numbers.pop();
 					}
-					std::cout <<std::endl;
 
 					numbers.push(function.func(args));
 					functions.pop();
@@ -105,7 +121,7 @@ int main() {
 			}
 		}
 	}
-	
+
 	if (numbers.size() != 1 || functions.size() != 1 || functions.top() != "=")
 		std::cout << "error." << std::endl;
 	else
